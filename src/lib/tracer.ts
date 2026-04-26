@@ -17,7 +17,6 @@ export async function traceImageToSvg(
 ): Promise<TracingResult> {
   return new Promise((resolve, reject) => {
     const img = new Image();
-    img.crossOrigin = 'anonymous';
 
     img.onload = async () => {
       try {
@@ -30,7 +29,6 @@ export async function traceImageToSvg(
         const ctx = canvas.getContext('2d')!;
         ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
 
-        // Try imagetracerjs
         try {
           const ImageTracer = (await import('imagetracerjs')).default;
           const svgStr = ImageTracer.imagedataToSVG(
@@ -39,10 +37,12 @@ export async function traceImageToSvg(
           );
           resolve({ svg: svgStr, width: canvas.width, height: canvas.height });
         } catch {
-          // Fallback: canvas-based tracing
           const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
           const svg = fallbackTrace(imageData, canvas.width, canvas.height, options);
           resolve({ svg, width: canvas.width, height: canvas.height });
+        } finally {
+          canvas.width = 0;
+          canvas.height = 0;
         }
       } catch (err) {
         reject(err);
@@ -84,7 +84,6 @@ function fallbackTrace(
   const paths: string[] = [];
 
   if (options.colorMode === 'binary') {
-    // Scales detailLevel [0,100] to a ±50 offset from the 128 mid-brightness threshold
     const threshold = Math.round(128 + (options.detailLevel - 50) * 1.27);
     const mask = new Uint8Array(width * height);
     for (let i = 0; i < width * height; i++) {
@@ -112,9 +111,9 @@ function quantizeImageColors(
   height: number,
   numColors: number
 ): Map<string, Uint8Array> {
-  // Cube root distributes numColors evenly across R/G/B axes (e.g. 8 colors → step=64 → 4 levels per channel)
-  const step = Math.round(256 / Math.cbrt(numColors));
+  const step = Math.max(1, Math.round(256 / Math.cbrt(numColors)));
   const colorMap = new Map<string, Uint8Array>();
+  const counts = new Map<string, number>();
 
   for (let i = 0; i < width * height; i++) {
     const a = data[i * 4 + 3];
@@ -123,12 +122,15 @@ function quantizeImageColors(
     const g = Math.min(255, Math.round(data[i * 4 + 1] / step) * step);
     const b = Math.min(255, Math.round(data[i * 4 + 2] / step) * step);
     const key = `rgb(${r},${g},${b})`;
-    if (!colorMap.has(key)) colorMap.set(key, new Uint8Array(width * height));
+    if (!colorMap.has(key)) {
+      colorMap.set(key, new Uint8Array(width * height));
+      counts.set(key, 0);
+    }
     colorMap.get(key)![i] = 1;
+    counts.set(key, (counts.get(key) ?? 0) + 1);
   }
 
-  // Filter tiny regions
-  return new Map([...colorMap.entries()].filter(([, m]) => m.reduce((s, v) => s + v, 0) > 100));
+  return new Map([...colorMap.entries()].filter(([key]) => (counts.get(key) ?? 0) > 100));
 }
 
 function scanLineTrace(mask: Uint8Array, width: number, height: number): string {
@@ -138,7 +140,7 @@ function scanLineTrace(mask: Uint8Array, width: number, height: number): string 
     for (let x = 0; x <= width; x++) {
       const px = x < width ? mask[y * width + x] : 0;
       if (!inShape && px === 1) { inShape = true; startX = x; }
-      else if (inShape && px === 0) { inShape = false; segs.push(`M${startX},${y}H${x}V${y+1}H${startX}Z`); }
+      else if (inShape && px === 0) { inShape = false; segs.push(`M${startX},${y}H${x}V${y + 1}H${startX}Z`); }
     }
   }
   return segs.join(' ');

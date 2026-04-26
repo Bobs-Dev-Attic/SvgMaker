@@ -1,14 +1,15 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Wand2, RefreshCw, Loader2, Zap } from 'lucide-react';
+import { Wand2, RefreshCw, Loader2, Zap, AlertCircle } from 'lucide-react';
 import FileUpload from '@/components/FileUpload';
 import SmartToolbar from '@/components/SmartToolbar';
 import LiveStats from '@/components/LiveStats';
 import ExportButton from '@/components/ExportButton';
 import VectorCanvas from '@/components/VectorCanvas';
 import { getSvgStats } from '@/lib/svgOptimizer';
+import { sanitizeSvg } from '@/lib/sanitizeSvg';
 
 export default function Home() {
   const [imageData, setImageData] = useState<string | null>(null);
@@ -21,9 +22,26 @@ export default function Home() {
   const [colorMode, setColorMode] = useState<'color' | 'grayscale' | 'binary'>('color');
   const [stats, setStats] = useState({ fileSize: 0, pointCount: 0 });
   const [originalSize, setOriginalSize] = useState<number | undefined>();
+  const [processingError, setProcessingError] = useState<string | null>(null);
 
-  const handleFileSelect = useCallback((dataUrl: string, file: File) => {
-    setImageData(dataUrl);
+  const traceRequestIdRef = useRef(0);
+
+  useEffect(() => {
+    return () => {
+      if (imageData?.startsWith('blob:')) {
+        URL.revokeObjectURL(imageData);
+      }
+    };
+  }, [imageData]);
+
+  const handleFileSelect = useCallback((objectUrl: string, file: File) => {
+    setProcessingError(null);
+    setImageData((prev) => {
+      if (prev?.startsWith('blob:')) {
+        URL.revokeObjectURL(prev);
+      }
+      return objectUrl;
+    });
     setFileName(file.name.replace(/\.[^.]+$/, ''));
     setOriginalSize(file.size);
     setSvgContent('');
@@ -32,23 +50,33 @@ export default function Home() {
 
   const runTrace = useCallback(async () => {
     if (!imageData) return;
+    const requestId = ++traceRequestIdRef.current;
+    setProcessingError(null);
     setIsTracing(true);
+
     try {
       const { traceImageToSvg } = await import('@/lib/tracer');
       const result = await traceImageToSvg(imageData, { detailLevel, colorMode });
-      setSvgContent(result.svg);
-      const s = getSvgStats(result.svg);
-      setStats(s);
-    } catch (err) {
-      console.error('Tracing failed:', err);
+      if (requestId !== traceRequestIdRef.current) return;
+
+      const safeSvg = sanitizeSvg(result.svg);
+      setSvgContent(safeSvg);
+      setStats(getSvgStats(safeSvg));
+    } catch {
+      if (requestId === traceRequestIdRef.current) {
+        setProcessingError('Tracing failed. Please try another image or lower detail settings.');
+      }
     } finally {
-      setIsTracing(false);
+      if (requestId === traceRequestIdRef.current) {
+        setIsTracing(false);
+      }
     }
   }, [imageData, detailLevel, colorMode]);
 
   const handleSvgUpdate = useCallback((newSvg: string) => {
-    setSvgContent(newSvg);
-    setStats(getSvgStats(newSvg));
+    const safeSvg = sanitizeSvg(newSvg);
+    setSvgContent(safeSvg);
+    setStats(getSvgStats(safeSvg));
   }, []);
 
   const hasImage = !!imageData;
@@ -100,6 +128,13 @@ export default function Home() {
               )}
             </AnimatePresence>
 
+            {processingError && (
+              <div className="flex items-start gap-2 rounded-lg border border-red-900/60 bg-red-950/30 p-3 text-red-300 text-sm">
+                <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                <span>{processingError}</span>
+              </div>
+            )}
+
             <SmartToolbar
               detailLevel={detailLevel}
               cleanWobbles={cleanWobbles}
@@ -113,7 +148,7 @@ export default function Home() {
             />
 
             <motion.button
-              onClick={runTrace}
+              onClick={() => void runTrace()}
               disabled={!hasImage || isTracing}
               whileHover={{ scale: hasImage && !isTracing ? 1.02 : 1 }}
               whileTap={{ scale: hasImage && !isTracing ? 0.97 : 1 }}
@@ -180,6 +215,7 @@ export default function Home() {
                     cleanWobbles={cleanWobbles}
                     roundCorners={roundCorners}
                     onSvgUpdate={handleSvgUpdate}
+                    onProcessingError={setProcessingError}
                   />
                 </motion.div>
               ) : (

@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Download, Loader2, Sparkles, CheckCircle2 } from 'lucide-react';
 import { optimizeSvg } from '@/lib/svgOptimizer';
+import { sanitizeSvg } from '@/lib/sanitizeSvg';
 
 interface ExportButtonProps {
   svgContent: string;
@@ -19,7 +20,7 @@ export default function ExportButton({ svgContent, fileName = 'output', disabled
     setState('optimizing');
 
     await new Promise(r => setTimeout(r, 300));
-    const optimized = optimizeSvg(svgContent);
+    const optimized = optimizeSvg(sanitizeSvg(svgContent));
 
     const blob = new Blob([optimized], { type: 'image/svg+xml' });
     const url = URL.createObjectURL(blob);
@@ -27,7 +28,7 @@ export default function ExportButton({ svgContent, fileName = 'output', disabled
     a.href = url;
     a.download = `${fileName}.svg`;
     a.click();
-    URL.revokeObjectURL(url);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
 
     setState('done');
     setTimeout(() => setState('idle'), 2500);

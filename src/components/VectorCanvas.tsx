@@ -1,14 +1,16 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Loader2 } from 'lucide-react';
+import { sanitizeSvg } from '@/lib/sanitizeSvg';
 
 interface VectorCanvasProps {
   svgContent: string;
   cleanWobbles: number;
   roundCorners: number;
   onSvgUpdate: (svg: string) => void;
+  onProcessingError?: (message: string | null) => void;
 }
 
 export default function VectorCanvas({
@@ -16,15 +18,24 @@ export default function VectorCanvas({
   cleanWobbles,
   roundCorners,
   onSvgUpdate,
+  onProcessingError,
 }: VectorCanvasProps) {
-  const containerRef = useRef<HTMLDivElement>(null);
   const [isProcessing, setIsProcessing] = useState(false);
+  const lastEffectKeyRef = useRef<string>('');
+  const safeSvgContent = useMemo(() => sanitizeSvg(svgContent), [svgContent]);
 
   useEffect(() => {
     if (!svgContent || typeof window === 'undefined') return;
+    if (cleanWobbles <= 0 && roundCorners <= 0) return;
+
+    let isActive = true;
+    const effectKey = `${cleanWobbles}:${roundCorners}:${safeSvgContent}`;
+    if (lastEffectKeyRef.current === effectKey) return;
 
     const applyPaperEffects = async () => {
       setIsProcessing(true);
+      onProcessingError?.(null);
+
       try {
         const paper = (await import('paper')).default;
         const canvas = document.createElement('canvas');
@@ -32,45 +43,52 @@ export default function VectorCanvas({
         canvas.height = 600;
         paper.setup(canvas);
 
-        // Parse SVG
-        const importedItem = paper.project.importSVG(svgContent);
-        
-        if (cleanWobbles > 0 || roundCorners > 0) {
-          const tolerance = cleanWobbles / 100 * 5;
-          const smoothFactor = roundCorners / 100;
+        const importedItem = paper.project.importSVG(safeSvgContent);
+        const tolerance = cleanWobbles / 100 * 5;
+        const smoothFactor = roundCorners / 100;
 
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          (importedItem as any).getItems({ class: paper.Path }).forEach((item: paper.Item) => {
-            const path = item as paper.Path;
-            if (cleanWobbles > 0 && tolerance > 0) {
-              path.simplify(tolerance);
-            }
-            if (roundCorners > 0) {
-              path.smooth({ type: 'catmull-rom', factor: smoothFactor });
-            }
-          });
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (importedItem as any).getItems({ class: paper.Path }).forEach((item: paper.Item) => {
+          const path = item as paper.Path;
+          if (cleanWobbles > 0 && tolerance > 0) {
+            path.simplify(tolerance);
+          }
+          if (roundCorners > 0) {
+            path.smooth({ type: 'catmull-rom', factor: smoothFactor });
+          }
+        });
 
-          const processed = paper.project.exportSVG({ asString: true }) as string;
-          onSvgUpdate(processed);
-          paper.project.clear();
+        const processed = paper.project.exportSVG({ asString: true }) as string;
+        if (isActive) {
+          lastEffectKeyRef.current = effectKey;
+          onSvgUpdate(sanitizeSvg(processed));
         }
-      } catch (err) {
-        console.error('Paper.js error:', err);
+        paper.project.clear();
+      } catch {
+        if (isActive) {
+          onProcessingError?.('Vector post-processing failed. Try lowering Clean Wobbles / Round Corners.');
+        }
       } finally {
-        setIsProcessing(false);
+        if (isActive) {
+          setIsProcessing(false);
+        }
       }
     };
 
-    if (cleanWobbles > 0 || roundCorners > 0) {
-      const timer = setTimeout(applyPaperEffects, 400);
-      return () => clearTimeout(timer);
-    }
-  }, [svgContent, cleanWobbles, roundCorners, onSvgUpdate]);
+    const timer = setTimeout(() => {
+      void applyPaperEffects();
+    }, 400);
 
-  if (!svgContent) return null;
+    return () => {
+      isActive = false;
+      clearTimeout(timer);
+    };
+  }, [svgContent, cleanWobbles, roundCorners, safeSvgContent, onSvgUpdate, onProcessingError]);
+
+  if (!safeSvgContent) return null;
 
   return (
-    <div className="relative w-full" ref={containerRef}>
+    <div className="relative w-full">
       {isProcessing && (
         <div className="absolute inset-0 bg-gray-950/60 flex items-center justify-center z-10 rounded-xl">
           <div className="flex items-center gap-2 text-violet-300">
@@ -86,7 +104,7 @@ export default function VectorCanvas({
         className="w-full bg-gray-900 rounded-xl border border-gray-800 overflow-hidden
                    flex items-center justify-center p-4"
         style={{ minHeight: 300 }}
-        dangerouslySetInnerHTML={{ __html: svgContent }}
+        dangerouslySetInnerHTML={{ __html: safeSvgContent }}
       />
     </div>
   );

@@ -45,7 +45,12 @@ export function optimizeSvg(svgString: string): string {
 
 export function getSvgStats(svgString: string): { fileSize: number; pointCount: number } {
   const fileSize = new Blob([svgString]).size;
-  const pathMatches = svgString.match(/[MLCQAZmlcqaz]/g) || [];
-  const pointCount = pathMatches.length;
+  const pathDataMatches = svgString.match(/d="([^"]+)"/g) ?? [];
+
+  const pointCount = pathDataMatches.reduce((total, dAttr) => {
+    const commands = dAttr.match(/[MLCQASTHVZmlcqasthvz]/g) ?? [];
+    return total + commands.length;
+  }, 0);
+
   return { fileSize, pointCount };
 }
