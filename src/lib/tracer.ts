@@ -84,6 +84,7 @@ function fallbackTrace(
   const paths: string[] = [];
 
   if (options.colorMode === 'binary') {
+    // 1.27 = 127/100: maps detailLevel range [0,100] to threshold range [1,255] centered at 128
     const threshold = Math.round(128 + (options.detailLevel - 50) * 1.27);
     const mask = new Uint8Array(width * height);
     for (let i = 0; i < width * height; i++) {
@@ -111,6 +112,7 @@ function quantizeImageColors(
   height: number,
   numColors: number
 ): Map<string, Uint8Array> {
+  // Cube root distributes numColors evenly across R/G/B axes (e.g. 8 colors → step=64 → 4 levels per channel)
   const step = Math.round(256 / Math.cbrt(numColors));
   const colorMap = new Map<string, Uint8Array>();
 
