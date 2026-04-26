@@ -84,7 +84,7 @@ function fallbackTrace(
   const paths: string[] = [];
 
   if (options.colorMode === 'binary') {
-    // 1.27 = 127/100: maps detailLevel range [0,100] to threshold range [1,255] centered at 128
+    // Scales detailLevel [0,100] to a ±50 offset from the 128 mid-brightness threshold
     const threshold = Math.round(128 + (options.detailLevel - 50) * 1.27);
     const mask = new Uint8Array(width * height);
     for (let i = 0; i < width * height; i++) {

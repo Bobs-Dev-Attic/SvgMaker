@@ -1,6 +1,6 @@
 # SvgMaker — PNG to SVG Converter
 
-A high-performance, client-side PNG/JPG/WebP to SVG conversion tool built with Next.js 14, TypeScript, and Tailwind CSS.
+A high-performance, client-side PNG/JPG/WebP to SVG conversion tool built with Next.js 16, TypeScript, and Tailwind CSS.
 
 ## Features
 
@@ -24,7 +24,7 @@ Open [http://localhost:3000](http://localhost:3000) with your browser to see the
 
 ## Stack
 
-- [Next.js 14](https://nextjs.org) with App Router
+- [Next.js 16](https://nextjs.org) with App Router
 - [TypeScript](https://www.typescriptlang.org/) + [Tailwind CSS](https://tailwindcss.com/)
 - [imagetracerjs](https://github.com/jankovicsandras/imagetracerjs) — bitmap to SVG tracing
 - [Paper.js](http://paperjs.org/) — vector path manipulation
