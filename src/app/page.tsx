@@ -126,11 +126,11 @@ export default function Home() {
               `}
             >
               {isTracing ? (
-                <><Loader2 className="w-4 h-4 animate-spin" />Tracing…</>
+                <><Loader2 className="w-4 h-4 animate-spin" /><span>Tracing…</span></>
               ) : hasSvg ? (
-                <><RefreshCw className="w-4 h-4" />Re-trace</>
+                <><RefreshCw className="w-4 h-4" /><span>Re-trace</span></>
               ) : (
-                <><Wand2 className="w-4 h-4" />Convert to SVG</>
+                <><Wand2 className="w-4 h-4" /><span>Convert to SVG</span></>
               )}
             </motion.button>
 

@@ -89,7 +89,7 @@ export default function SmartToolbar({
               className={`flex-1 py-1.5 px-2 rounded-lg text-xs font-medium transition-all
                 ${colorMode === mode.value
                   ? 'bg-violet-600 text-white shadow-lg shadow-violet-900/40'
-                  : 'bg-gray-800 text-gray-400 hover:bg-gray-750 hover:text-gray-200'}
+                  : 'bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-gray-200'}
                 disabled:opacity-40 disabled:cursor-not-allowed`}
             >
               {mode.label}
